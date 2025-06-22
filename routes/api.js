@@ -1,109 +1,79 @@
 'use strict';
-const bodyParser = require('body-parser')
+
 const mongoose = require('mongoose');
-mongoose.connect(process.env.DB);
 
 const bookSchema = new mongoose.Schema({
-  title: String,
-  comments: []
-})
+  title: { type: String, required: true },
+  comments: [String]
+});
 
-const BookModel = mongoose.model('book', bookSchema)
+const Book = mongoose.model('Book', bookSchema);
 
 module.exports = function (app) {
-
   app.route('/api/books')
-    .get(function (req, res){
-      
-      BookModel.find({}, (err, data) => {
-        if (err) return console.log(err)
-        if (!data) {
-          return res.json([])
-        }
-        return res.send(data.map(book => ({_id: book._id, title: book.title, commentcount: book.comments.length})))
-      })
-      //response will be array of book objects
-      //json res format: [{"_id": bookid, "title": book_title, "commentcount": num_of_comments },...]
+    .get(function (req, res) {
+      Book.find({}, (err, books) => {
+        if (err) return res.status(500).send('Database error');
+        res.json(books.map(book => ({
+          _id: book._id,
+          title: book.title,
+          commentcount: book.comments.length
+        })));
+      });
     })
-    
-    .post(function (req, res){
-      let title = req.body.title
-      if (!title) {
-        return res.json("missing required field title")
-      }
 
-      const newBook = BookModel({
-        title: title,
-        comments: new Array(0)
-      })
-
-      newBook.save((err, data) => {
-        if (err) return console.log(err)
-        return res.json({_id: data._id, title: data.title})
-      })
-      //response will contain new book object including atleast _id and title
+    .post(function (req, res) {
+      const { title } = req.body;
+      if (!title) return res.send('missing required field title');
+      const newBook = new Book({ title, comments: [] });
+      newBook.save((err, savedBook) => {
+        if (err) return res.status(500).send('Database error');
+        res.json({ _id: savedBook._id, title: savedBook.title });
+      });
     })
-    
-    .delete(function(req, res){
-      //if successful response will be 'complete delete successful'
-      BookModel.remove({}, (err, data) => {
-        return res.json("complete delete successful")
-      })
+
+    .delete(function (req, res) {
+      Book.deleteMany({}, err => {
+        if (err) return res.status(500).send('Database error');
+        res.send('complete delete successful');
+      });
     });
-
-
 
   app.route('/api/books/:id')
-    
-    .get(function (req, res){
-      let bookid = req.params.id;
-      BookModel.find({_id: bookid}, (err, data) => {
-        if (!data || data.length === 0) {
-          return res.json("no book exists")
-        }
-        return res.json(data.map(book => ({_id: book._id, title: book.title, comments: book.comments}))[0])
-      })
-      //json res format: {"_id": bookid, "title": book_title, "comments": [comment,comment,...]}
+    .get(function (req, res) {
+      Book.findById(req.params.id, (err, book) => {
+        if (err || !book) return res.send('no book exists');
+        res.json({
+          _id: book._id,
+          title: book.title,
+          comments: book.comments
+        });
+      });
     })
-    
-    .post(function(req, res){
-      let bookid = req.params.id;
-      let comment = req.body.comment;
-      if (!comment) {
-        return res.json("missing required field comment")
-      }
 
-    BookModel.findById({_id: bookid}, (err, data) => {
-      if (err) {
-        res.json("no book exists")
-        return console.log(err)
-      }
-      if (!data) {
-        return res.json("no book exists")
-      }
-      data.comments = [...data.comments, comment]
-      data.save((err, data) => {
-        return res.json({_id: bookid, title: data.title, comments: data.comments})
-      })
-    })
-      
-      //json res format same as .get
-    })
-    
-    .delete(function(req, res){
-      let bookid = req.params.id;
+    .post(function (req, res) {
+      const bookid = req.params.id;
+      const comment = req.body.comment;
+      if (!comment) return res.send('missing required field comment');
 
-      BookModel.remove({_id: bookid}, (err, data) => {
-        if (err) {
-          res.json("no book exists")
-          return console.log(err)
-        }
-        if (!data || data.deletedCount === 0) {
-          return res.json("no book exists")
-        }
-        return res.json("delete successful")
-      })
-      //if successful response will be 'delete successful'
+      Book.findById(bookid, (err, book) => {
+        if (err || !book) return res.send('no book exists');
+        book.comments.push(comment);
+        book.save((err, updatedBook) => {
+          if (err) return res.status(500).send('Database error');
+          res.json({
+            _id: updatedBook._id,
+            title: updatedBook.title,
+            comments: updatedBook.comments
+          });
+        });
+      });
+    })
+
+    .delete(function (req, res) {
+      Book.findByIdAndDelete(req.params.id, (err, result) => {
+        if (err || !result) return res.send('no book exists');
+        res.send('delete successful');
+      });
     });
-  
 };
