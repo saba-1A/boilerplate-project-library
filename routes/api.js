@@ -2,7 +2,10 @@
 const mongoose = require('mongoose');
 const Book = require('../models/book');
 
-mongoose.connect(process.env.DB, { useNewUrlParser: true, useUnifiedTopology: true });
+mongoose.connect(process.env.DB, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+});
 
 module.exports = function (app) {
 
@@ -67,5 +70,4 @@ module.exports = function (app) {
         res.send('no book exists');
       }
     });
-
 };
